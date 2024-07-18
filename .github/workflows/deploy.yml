@@ -1,2 +1,38 @@
+name: Deploy Bot
 
+on:
+  push:
+    branches:
+      - main
 
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v2
+
+    - name: Set up Node.js
+      uses: actions/setup-node@v3
+      with:
+        node-version: 'lts/*'
+
+    - name: Install dependencies
+      run: npm install --legacy-peer-deps
+
+    - name: Build Docker image
+      run: docker build -t flash-md-bot .
+
+    - name: Push Docker image
+      run: docker tag flash-md-bot:latest ${{ secrets.DOCKER_USERNAME }}/flash-md-bot:latest
+      run: docker push ${{ secrets.DOCKER_USERNAME }}/flash-md-bot:latest
+
+    - name: Deploy to server
+      run: |
+        ssh -o StrictHostKeyChecking=no ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_IP }} << 'EOF'
+          docker pull ${{ secrets.DOCKER_USERNAME }}/flash-md-bot:latest
+          docker stop flash-md-bot || true
+          docker rm flash-md-bot || true
+          docker run -d --name flash-md-bot -p 5000:5000 ${{ secrets.DOCKER_USERNAME }}/flash-md-bot:latest
+        EOF
